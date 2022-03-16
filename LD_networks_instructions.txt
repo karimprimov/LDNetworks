@@ -1,0 +1,37 @@
+#### LD Networks: Updated version with annotations 
+
+# This script starts with already mapped bams, with all clones removed (e.g. bams_noclones list)
+
+#update these with your info:
+export GENOME_FASTA=$WORK/db/Mcavernosa_July2018_phased.fasta #change to your pathway to the genome
+export allo=tagmap #change to your allocation
+export email=dgallery@utexas.edu #change to your email
+
+#---------------------- ADMIXTURE (after removing clones to obtain sites for LD Networks)
+
+#change minInd to ~75-80% of your individuals
+FILTERS="-minMapQ 20 -minQ 25 -minInd 84 -doHWE 1 -sb_pval 1e-5 -hetbias_pval 1e-5 -uniqueOnly 1 -remove_bads 1 -skipTriallelic 1 -snp_pval 1e-5 -minMaf 0.05 -maxHetFreq 0.5"
+TODO="-doMajorMinor 4 -ref $GENOME_FASTA -anc $GENOME_FASTA -doMaf 1 -dosnpstat 1 -doGeno 8 -doPost 1 -doBcf 1 --ignore-RG 0 -doCounts 1 -doSaf 1"
+echo "angsd -b bams_noclones -GL 1 $FILTERS $TODO -P 1 -out filtersites" > filtersites
+launcher_creator.py -j filtersites -n filtersites -t 2:00:00 -e dgallery@utexas.edu -w 1 -a tagmap
+sbatch filtersites.slurm
+
+idev
+NS=`zcat filtersites.geno.gz | wc -l`
+NB=`cat bams_noclones | wc -l`
+zcat filtersites.mafs.gz | tail -n +2 | cut -f 1,2 > mcld.sites
+module load gsl
+ngsLD --geno filtersites.geno.gz --probs 1 --n_ind $NB --n_sites $NS --max_kb_dist 0 --pos mcld.sites --out mcld_gl.LD --n_threads 12 --extend_out 1
+exit
+
+# scp LD_WGCNA_data.R to main project directory 
+#[I sent you 2, one for 2brad data and one for tagseq]- make sure you use the right one, I don't remember the difference, but they are specific to the datasets
+
+module load Rstats
+echo "Rscript --vanilla LD_WGCNA_data.R filtersites.geno.gz mcld_gl.LD bams_noclones mcav" > lddat_gl_hetfilt_bamsnc	
+launcher_creator.py -j lddat_gl_hetfilt_bamsnc -n lddat_gl_hetfilt_bamsnc -t 00:40:00 -w 1 -a tagmap -e dgallery@utexas.edu
+sbatch lddat_gl_hetfilt_bamsnc.slurm
+
+#copy LDsquare_datt_traits.RData to local computer and use LD_WGCNA_analysis.R to run WGCNA steps # see notes on previous R script
+
+#R scripts for analysis attached to email
